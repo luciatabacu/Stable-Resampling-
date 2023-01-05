@@ -1,0 +1,265 @@
+library(actuar)
+library(stabledist)
+#set.seed(1244)
+# January 12, 2021
+
+### PART A 
+#(1) Calculate the true expectation mu of X = Z*log(|Z|), where Z is Pareto with shape parameter a and scale parameter s 
+
+f <- function(z) {z*log(abs(z))*(1.5/(z)^2.5)}
+int <- integrate(f, lower = 1, upper = Inf)
+mu <- int$value
+mu   
+
+## DEFINITIONS: quantities to be retrieved as tables
+nsim <- 500
+c.mu.l <- rep(0, nsim)
+c.mu.l.hat <- rep(0, nsim)
+c.mu <- rep(0, nsim)
+c.mu.u <- rep(0, nsim)
+c.mu.u.hat <- rep(0, nsim)
+c.mu.hat <- rep(0, nsim)
+c.nor <- rep(0, nsim)
+
+mu.hat <- rep(0, nsim)
+Var.hat <- rep(0,nsim)
+XY.bar <- rep(0, nsim)
+Y.bar <- rep(0, nsim)
+
+ll.mu <- rep(0, nsim)
+ul.mu <- rep(0, nsim)
+
+ll <- rep(0, nsim)
+ul <- rep(0, nsim)
+
+
+
+q1.mu <- rep(0, nsim) 
+q2.mu <- rep(0, nsim) 
+
+q1 <- rep(0, nsim) 
+q2 <- rep(0, nsim) 
+## END DEFINITIONS
+
+for (r in 1:nsim ){
+  ### PART B Simulation of  X- and Y-sample
+  n = 1000
+  #rpareto(n, shape, scale)
+  a = 1.5  # shape parameter 
+  s = 1  # scale parameter 
+  
+  #(2) simulate Z with pareto distrib with parameters a and s
+  Z <- rpareto1(n, a, s) # this is a vector of length n 
+  
+  #(3) transform the data Z using function f and create the new random variables X
+  X <- rep(0, n)
+  for (i in 1:n)
+  {
+    X[i] <- Z[i]*log(abs(Z[i])) 
+  }
+  
+  
+  # (4) simulate the resampling variables Y from a stable distribution with parameters p=1.2, 
+  
+  
+  repeat{
+    
+    Y <- rstable(n, alpha=1.2, beta=0.5, gamma = 1, delta = 0, pm = 0)  # resampling variables
+    
+    if ((mean(Y) >= 0.7) & (mean(Y) <= 1.3)){
+      break 
+      Y <- Y
+    }
+  }
+  
+  
+  
+  ### PART C 
+  # (5) the norming constant 
+  C <- sum(1/(10:n))
+  C   
+  
+  
+  ### PART D Calculate 
+  # (6) the crude estimator for the mean mu 
+  
+  mu.hat[r] <- mean(X)
+  
+  Var.hat[r] <- var(X)
+  
+  ## take permutations of the sequences: DEFINITIONS 
+  perm <- 5
+  Vperm <- matrix(0, nrow=perm, ncol=n)
+  Wperm <- matrix(0, nrow=perm, ncol=n)
+  
+  for (j in 1:perm){
+    Vperm[j,] <- sample(X*Y)
+    Wperm[j,] <- sample(X*Y-mu.hat[r]*Y)
+  }
+  
+  
+  
+  
+  #(7) resampled mean estimators with true mean
+  p <- 1.2
+  
+  # for each permutation calculate the quantiles (do teh same as in the original for each permutated sample)
+  
+  
+  t.k.mu <- matrix(0, nrow=perm, ncol=n)
+  for (j in 1:perm){
+    for (i in 10:n){
+      
+      t.k.mu[j,i] <- (i^(-1/p))*(sum(Vperm[j,1:i])-mu*i)
+      
+    }
+  }
+  
+  
+  
+  
+  # (8) the resampled mean estimators with estimated mean 
+  t.k <- matrix(0, nrow=perm, ncol=n)
+  for (j in 1:perm){
+    for (i in 10:n){
+      
+      t.k[j,i] <- (i^(-1/p))*(sum(Wperm[j,1:i]))
+      
+    }
+  }
+  
+  
+  
+  
+  
+  # (9) a.s.empirical distribtuion function with true mean 
+  
+    t <- seq(min(t.k.mu), max(t.k.mu), 0.1) #this is the grid of points in steps of 0.1
+    
+    EDF.mu.mat <- matrix(0, nrow=perm, ncol=length(t)) 
+    
+      for (k in 1:perm){
+          for (i in 1:length(t)){
+      
+      EDF.mu.mat[k,i] <- (1/C)*sum((1/(10:n))*(ifelse(t.k.mu[k,10:n] <= t[i],1,0)))
+      
+    }
+    }
+    EDF.mu <- colSums(EDF.mu.mat)/perm
+    
+    
+    # (10) a.s. empirical distribution function with estimated mean 
+    t.hat <- seq(min(t.k), max(t.k), 0.1) # this is the grid of points in steps of 0.1; NOTE this is diferernt than the one in part (7)
+    
+    EDF.mat <- matrix(0, nrow=perm, ncol=length(t.hat)) 
+    
+    for (k in 1:perm){
+         for (i in 1:length(t.hat)){
+      
+      EDF.mat[k,i] <- (1/C)*sum((1/(10:n))*(ifelse(t.k[k,10:n] <= t.hat[i],1,0)))
+      
+    }
+    }
+    EDF <- colSums(EDF.mat)/perm
+    ### PART E 
+    ## 95 % CI  
+    alpha1 = 0.025
+    alpha2 = 0.975
+    
+    
+    
+    
+    
+    # (11) 95% CI with KNOWN mu 
+    # find the quantiles; Note these are approximations of 0.025 and 0.975 
+    
+    Q2.mu <- max(which(EDF.mu <= alpha2)) 
+    Q1.mu <- max(which(EDF.mu <= alpha1)) 
+    
+    
+    
+    q1.mu[r] <- min(t.k.mu) + Q1.mu*0.1
+    
+    q2.mu[r] <- min(t.k.mu) + Q2.mu*0.1 
+    
+    
+    
+    
+    # (12) CI with UNKNOWN mu 
+    
+    Q2 <- max(which(EDF <= alpha2)) 
+    Q1 <- max(which(EDF <= alpha1)) 
+    
+    
+    q1[r] <- min(t.k) + Q1*0.1
+    
+    q2[r] <- min(t.k) + Q2*0.1 
+    
+  
+  
+  # (13) Avveraging the quantiles over permutations
+  
+  
+  
+  
+  ## DEFINITIONS
+  s.L.mu <- q1.mu[r] 
+  s.U.mu <- q2.mu[r]
+  
+  s.L <- q1[r] 
+  s.U <- q2[r]
+  
+  # (14) compute the XY bar and Y bar
+  
+  XY.bar <- mean(X*Y)
+  Y.bar <- (1/n)*sum(Y)
+  
+  
+  # (15)compute the lower limit (ll.mu) and the uppe rlimit (ul.mu) with known mean and with unknown mean
+  ll.mu[r] <- XY.bar - s.U.mu*((n)^(1/p))*(1/n)  
+  ul.mu[r] <- XY.bar - s.L.mu*((n)^(1/p))*(1/n)  
+  
+  
+  ll[r] <- mu.hat[r] - s.U*((n)^(1/p))*(1/Y.bar)*(1/n)  
+  ul[r] <- mu.hat[r] - s.L*((n)^(1/p))*(1/Y.bar)*(1/n)  
+  
+  
+  ### PART F  Check the cover probability
+  
+  # (16) compute the TRUE/False table whether mu falls into the CI (and one sided CI)
+  
+  c.mu.u[r] <- ifelse(mu < ul.mu[r],1,0)
+  c.mu.l.hat[r] <- ifelse(mu > ll[r],1,0)
+  c.mu.l[r] <- ifelse(mu > ll.mu[r],1,0)
+  c.mu.u.hat[r] <- ifelse(mu < ul[r],1,0)
+  c.mu[r] <- ifelse((mu > ll.mu[r]) & (mu < ul.mu[r]),1,0)
+  c.mu.hat[r] <- ifelse((mu > ll[r])& (mu < ul[r]),1,0)
+  
+  
+  # 95% CI when using t-distribution
+  
+  c.nor[r] <- ifelse(abs(mu-mu.hat[r])<1.96*(n*Var.hat[r])^(-0.5),1,0) 
+  
+}
+
+# (17) Calculate the cover probabilities
+
+P.mu.l <- sum(c.mu.l)/nsim
+P.mu.u <- sum(c.mu.u)/nsim
+P.l <- sum(c.mu.l.hat)/nsim
+P.u <- sum(c.mu.u.hat)/nsim
+P.nor <- sum(c.nor)/nsim
+P.mu <- sum(c.mu)/nsim
+P <- sum(c.mu.hat)/nsim
+
+### Print the results: cover probabilities and mean lenghts of CI
+
+P.mu.l
+P.mu.u
+P.l
+P.u
+P.mu
+P
+P.nor
+mean(ul-ll)
+mean(ul.mu-ll.mu)
